@@ -4,129 +4,749 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluetooth Service Discover</title>
+    <title>Web Bluetooth Printer</title>
     <style>
         body {
-            font-family: sans-serif;
-            margin: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        h1 {
+            color: #111;
+            font-size: 1.5rem;
+        }
+
+        button,
+        input[type="file"],
+        input[type="text"],
+        input[type="range"],
+        select {
+            font-size: 16px;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            cursor: pointer;
+            box-sizing: border-box;
+            width: 100%;
         }
 
         button {
-            font-size: 18px;
-            padding: 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 15px;
         }
 
-        input[type="text"] {
-            font-size: 16px;
-            padding: 10px;
-            width: 100%;
-            box-sizing: border-box;
-            margin-bottom: 10px;
-            font-family: monospace;
+        button:disabled {
+            background-color: #ccc;
         }
 
-        pre {
-            background-color: #eee;
-            border: 1px solid #ccc;
+        #controls {
+            margin-top: 15px;
             padding: 10px;
-            height: 400px;
+            background-color: #e9e9e9;
+            border-radius: 5px;
+        }
+
+        #status {
+            font-size: 1rem;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+
+        #previewContainer {
+            margin-top: 15px;
+            border: 1px dashed #ccc;
+            padding: 10px;
+            text-align: center;
+            background-color: #fff;
+        }
+
+        #previewCanvas {
+            border: 1px solid #333;
+            background-color: #fff;
+            max-width: 100%;
+            height: auto;
+        }
+
+        #log {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            height: 150px;
             overflow-y: scroll;
+            font-family: "Courier New", Courier, monospace;
+            white-space: pre-wrap;
+            font-size: 0.8rem;
+        }
+
+        textarea {
+            width: 100%;
+            height: 150px;
+            font-family: monospace;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .tab-bar {
+            display: flex;
+            border-bottom: 2px solid #ccc;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #e9e9e9;
+            border: 1px solid #ccc;
+            border-bottom: none;
+            border-radius: 5px 5px 0 0;
+            margin-bottom: -2px;
+        }
+
+        .tab-button.active {
+            background-color: #fff;
+            border-bottom: 2px solid #fff;
+            font-weight: bold;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-top: none;
+            background-color: #fff;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        .control-group label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
         }
     </style>
 </head>
 
 <body>
-    <h1>Bluetooth Service Discover (v3 - The "Hack")</h1>
-    <p>Use a tool like "nRF Connect for Mobile" to find your printer's proprietary "Service UUID" (the one with a
-        "write" characteristic) and paste it below.</p>
+    <h1>Web Bluetooth Printer</h1>
+    <p>Connect, select a mode, and print.</p>
 
-    <input type="text" id="serviceUuidInput" placeholder="Paste Service UUID from nRF Connect here...">
+    <button id="connectButton">Connect to Printer</button>
+    <div id="status">STATUS: DISCONNECTED</div>
 
-    <button id="connectButton">Connect & Discover Services</button>
+    <!-- Tab Navigation -->
+    <div class="tab-bar">
+        <div class="tab-button active" onclick="openTab('image')">Print Image</div>
+        <div class="tab-button" onclick="openTab('text')">Print Text</div>
+        <div class="tab-button" onclick="openTab('lastfm')">Print Last.fm</div>
+    </div>
+
+    <!-- Image Tab -->
+    <div id="image-tab" class="tab-content active">
+        <div class="control-group">
+            <label for="fileInput">1. Choose Image (JPG, PNG...)</label>
+            <input type="file" id="fileInput" accept=".bmp,.png,.jpg,.jpeg,.gif" disabled>
+        </div>
+        <div class="control-group">
+            <label for="contrastSlider">2. Adjust Contrast: <span id="contrastValue">128</span></label>
+            <input type="range" id="contrastSlider" min="0" max="255" value="128" disabled>
+        </div>
+        <button id="printButton" disabled>3. Print Image</button>
+        <div id="previewContainer">
+            <p>Image Preview (384px width)</p>
+            <canvas id="previewCanvas"></canvas>
+        </div>
+    </div>
+
+    <!-- Text Tab -->
+    <div id="text-tab" class="tab-content">
+        <div class="control-group">
+            <label for="textInput">1. Enter Text</label>
+            <textarea id="textInput" placeholder="Type your text here..."></textarea>
+        </div>
+        <div class="control-group">
+            <label for="fontSizeSelect">Font Size:</label>
+            <select id="fontSizeSelect">
+                <option value="20">Small (20px)</option>
+                <option value="28" selected>Medium (28px)</option>
+                <option value="36">Large (36px)</option>
+            </select>
+        </div>
+        <button id="generateTextButton" disabled>2. Generate & Preview Image</button>
+        <p>This will generate an image and load it in the "Print Image" tab.</p>
+    </div>
+
+    <!-- Last.fm Tab -->
+    <div id="lastfm-tab" class="tab-content">
+        <div class="control-group">
+            <label for="lastfmUser">Last.fm Username</label>
+            <input type="text" id="lastfmUser" placeholder="Your Last.fm Username">
+        </div>
+        <div class="control-group">
+            <label for="lastfmApiKey">Last.fm API Key</label>
+            <input type="text" id="lastfmApiKey" placeholder="Your Last.fm API Key">
+        </div>
+        <button id="startPollingButton" disabled>Start Polling</button>
+        <button id="stopPollingButton" disabled>Stop Polling</button>
+        <p>Prints your "now playing" track in real-time. Requires API key from last.fm/api/account/create</p>
+    </div>
+
     <pre id="log">Awaiting connection...</pre>
 
     <script>
+        // --- Get UI Elements ---
         const connectButton = document.getElementById('connectButton');
+        const statusDiv = document.getElementById('status');
         const logDiv = document.getElementById('log');
-        const serviceUuidInput = document.getElementById('serviceUuidInput');
 
+        // Image Tab
+        const fileInput = document.getElementById('fileInput');
+        const contrastSlider = document.getElementById('contrastSlider');
+        const contrastValueSpan = document.getElementById('contrastValue');
+        const printButton = document.getElementById('printButton');
+        const previewCanvas = document.getElementById('previewCanvas');
+        const previewCtx = previewCanvas.getContext('2d');
+
+        // Text Tab
+        const textInput = document.getElementById('textInput');
+        const fontSizeSelect = document.getElementById('fontSizeSelect');
+        const generateTextButton = document.getElementById('generateTextButton');
+
+        // Last.fm Tab
+        const lastfmUser = document.getElementById('lastfmUser');
+        const lastfmApiKey = document.getElementById('lastfmApiKey');
+        const startPollingButton = document.getElementById('startPollingButton');
+        const stopPollingButton = document.getElementById('stopPollingButton');
+
+        // --- Printer Constants ---
+        const PRINTER_WIDTH_PX = 384;
+        const SLICE_HEIGHT_PX = 8; // We will still slice in 8px heights
+
+        // --- Our "Hacked" Bluetooth Keys ---
+        const SERVICE_UUID = '49535343-fe7d-4ae5-8fa9-9fafd205e455';
+        const CHARACTERISTIC_UUID = '49535343-8841-43f4-a8d4-ecbe34729bb3';
+
+        // --- ESC/POS Command Constants (as Uint8Arrays) ---
+        const INIT = new Uint8Array([0x1B, 0x40]); // Initialize Printer
+        const FEED_ONE_LINE = new Uint8Array([0x0A]); // Simple Line Feed (LF)
+
+        // --- Global State ---
+        let printerCharacteristic = null; // This will be our "writer"
+        let currentImage = null; // Stores the loaded image object
+        let currentImageData = null; // Stores the processed ImageData from canvas
+        let lastfmPollInterval = null;
+        let lastPrintedTrack = '';
+
+        /**
+         * Logs a message to the on-screen console.
+         */
         function log(message) {
             console.log(message);
             logDiv.textContent += message + '\n';
+            logDiv.scrollTop = logDiv.scrollHeight;
         }
 
+        /**
+         * Tab navigation
+         */
+        function openTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(tabName + '-tab').classList.add('active');
+            document.querySelector(`.tab-button[onclick="openTab('${tabName}')"]`).classList.add('active');
+        }
+
+        /**
+         * Handles the "Connect" button click.
+         */
         connectButton.addEventListener('click', async () => {
-            const proprietaryServiceUuid = serviceUuidInput.value.trim();
-
-            if (!proprietaryServiceUuid) {
-                log('--- ERROR ---');
-                log('Please paste the Service UUID from nRF Connect first.');
-                return;
-            }
-
-            log(`Attempting to use proprietary Service UUID: ${proprietaryServiceUuid}`);
             log('Requesting Bluetooth device...');
-
             try {
                 const device = await navigator.bluetooth.requestDevice({
-                    // Use acceptAllDevices to ensure the printer appears in the list
                     acceptAllDevices: true,
-                    // ...but then *also* ask for permission to use the 
-                    // proprietary UUID you just entered.
-                    optionalServices: [proprietaryServiceUuid]
+                    optionalServices: [SERVICE_UUID] // Ask for permission for our service
                 });
 
                 log(`Connecting to GATT Server on ${device.name}...`);
-                device.addEventListener('gattserverdisconnected', () => {
-                    log('--- DEVICE DISCONNECTED ---');
-                });
+                device.addEventListener('gattserverdisconnected', onDisconnected);
                 const server = await device.gatt.connect();
                 log('--- CONNECTED ---');
-                log(`Device Name: ${device.name}`);
-                log(`Device ID: ${device.id}`);
 
-                log(`\nAttempting to get Service: ${proprietaryServiceUuid}`);
+                log('Getting Service...');
+                const service = await server.getPrimaryService(SERVICE_UUID);
 
-                // Now, instead of discovering all, we will try to get
-                // the *exact* service you gave us.
-                const service = await server.getPrimaryService(proprietaryServiceUuid);
+                log('Getting Characteristic...');
+                printerCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-                if (!service) {
-                    log('--- ERROR ---');
-                    log('Connected, but could not get the specified service.');
-                    log('Check the UUID for typos.');
+                log('Ready to print!');
+                statusDiv.textContent = 'STATUS: CONNECTED';
+                statusDiv.style.color = 'green';
+                connectButton.disabled = true;
+
+                // Enable all controls
+                fileInput.disabled = false;
+                contrastSlider.disabled = false;
+                generateTextButton.disabled = false;
+                startPollingButton.disabled = false;
+
+            } catch (err) {
+                log(`--- BLUETOOTH ERROR ---`);
+                log(err.message);
+            }
+        });
+
+        function onDisconnected() {
+            log('--- PRINTER DISCONNECTED ---');
+            statusDiv.textContent = 'STATUS: DISCONNECTED';
+            statusDiv.style.color = 'red';
+            connectButton.disabled = false;
+
+            // Disable all controls
+            fileInput.disabled = true;
+            contrastSlider.disabled = true;
+            printButton.disabled = true;
+            generateTextButton.disabled = true;
+            startPollingButton.disabled = true;
+
+            printerCharacteristic = null;
+            if (lastfmPollInterval) {
+                stopPolling();
+            }
+        }
+
+        /**
+         * This is our new "writer" function.
+         * It takes a buffer and splits it into small chunks.
+         */
+        async function writeToPrinter(data) {
+            if (!printerCharacteristic) {
+                throw new Error("Printer not connected.");
+            }
+
+            const MAX_CHUNK_SIZE = 100; // Send in 100-byte chunks
+            for (let i = 0; i < data.length; i += MAX_CHUNK_SIZE) {
+                const chunk = data.slice(i, i + MAX_CHUNK_SIZE);
+                // We use writeValueWithResponse for flow control
+                // This is slower but much more reliable
+                await printerCharacteristic.writeValueWithResponse(chunk);
+            }
+        }
+
+
+        // =================================================================
+        // IMAGE TAB LOGIC
+        // =================================================================
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            log(`File selected: ${file.name}`);
+            try {
+                const imageUrl = URL.createObjectURL(file);
+                currentImage = new Image();
+
+                currentImage.onload = async () => {
+                    log('Image loaded. Displaying preview...');
+                    displayImageOnCanvas(currentImage, parseInt(contrastSlider.value));
+                    URL.revokeObjectURL(imageUrl);
+                    printButton.disabled = false;
+                };
+                currentImage.onerror = () => { log('Error loading image.'); URL.revokeObjectURL(imageUrl); };
+                currentImage.src = imageUrl;
+
+            } catch (err) { log(`--- IMAGE PROCESSING ERROR ---`); log(err.message); }
+        });
+
+        contrastSlider.addEventListener('input', () => {
+            const threshold = parseInt(contrastSlider.value);
+            contrastValueSpan.textContent = threshold;
+            if (currentImage) {
+                displayImageOnCanvas(currentImage, threshold);
+            }
+        });
+
+        printButton.addEventListener('click', async () => {
+            if (!currentImageData) { log('No image loaded to print.'); return; }
+
+            log('--- Starting Image Print Job ---');
+            setControlsDisabled(true);
+
+            try {
+                const printThreshold = parseInt(contrastSlider.value);
+                await printImageDataToPrinter(currentImageData, printThreshold, false); // false = don't skip feed
+                log('--- Print Job Finished ---');
+            } catch (err) {
+                log(`--- PRINT ERROR ---`); log(err.message);
+            } finally {
+                setControlsDisabled(false);
+            }
+        });
+
+        function displayImageOnCanvas(img, threshold) {
+            const scaledHeight = Math.floor(img.height * (PRINTER_WIDTH_PX / img.width));
+            previewCanvas.width = PRINTER_WIDTH_PX;
+            previewCanvas.height = scaledHeight;
+
+            previewCtx.drawImage(img, 0, 0, PRINTER_WIDTH_PX, scaledHeight);
+
+            const imageData = previewCtx.getImageData(0, 0, PRINTER_WIDTH_PX, scaledHeight);
+
+            // This is our B&W conversion logic
+            convertImageDataToBW(imageData, threshold);
+
+            previewCtx.putImageData(imageData, 0, 0);
+            currentImageData = imageData; // Store for printing
+        }
+
+        // =================================================================
+        // TEXT TAB LOGIC
+        // =================================================================
+
+        generateTextButton.addEventListener('click', () => {
+            const text = textInput.value;
+            const fontSize = parseInt(fontSizeSelect.value);
+            if (!text) return;
+
+            log('Generating image from text...');
+
+            // Create a temporary canvas
+            const textCanvas = document.createElement('canvas');
+            const textCtx = textCanvas.getContext('2d');
+
+            textCanvas.width = PRINTER_WIDTH_PX;
+            textCtx.font = `${fontSize}px sans-serif`;
+            textCtx.fillStyle = 'black';
+            textCtx.textBaseline = 'top';
+
+            // --- Word Wrapping Logic ---
+            const lines = [];
+            const paragraphs = text.split('\n');
+
+            for (const paragraph of paragraphs) {
+                let currentLine = '';
+                const words = paragraph.split(' ');
+
+                for (const word of words) {
+                    const testLine = currentLine + word + ' ';
+                    const metrics = textCtx.measureText(testLine);
+                    if (metrics.width > PRINTER_WIDTH_PX && currentLine.length > 0) {
+                        lines.push(currentLine.trim());
+                        currentLine = word + ' ';
+                    } else {
+                        currentLine = testLine;
+                    }
+                }
+                lines.push(currentLine.trim());
+            }
+
+            // --- Draw text to canvas ---
+            const lineHeight = fontSize * 1.2;
+            textCanvas.height = lines.length * lineHeight;
+
+            textCtx.fillStyle = 'white'; // Set background to white
+            textCtx.fillRect(0, 0, textCanvas.width, textCanvas.height);
+
+            textCtx.fillStyle = 'black'; // Set text color to black
+            textCtx.font = `${fontSize}px sans-serif`;
+            textCtx.textBaseline = 'top';
+
+            for (let i = 0; i < lines.length; i++) {
+                textCtx.fillText(lines[i], 0, i * lineHeight);
+            }
+
+            // --- Load canvas as an Image object ---
+            currentImage = new Image();
+            currentImage.onload = () => {
+                log('Text image generated.');
+                // Load it into the preview
+                displayImageOnCanvas(currentImage, parseInt(contrastSlider.value));
+                printButton.disabled = false;
+                // Switch to the image tab
+                openTab('image');
+            };
+            currentImage.src = textCanvas.toDataURL();
+        });
+
+
+        // =================================================================
+        // LAST.FM TAB LOGIC
+        // =================================================================
+
+        startPollingButton.addEventListener('click', () => {
+            const user = lastfmUser.value.trim();
+            const apiKey = lastfmApiKey.value.trim();
+            if (!user || !apiKey) {
+                log('Please enter Last.fm User and API Key');
+                return;
+            }
+
+            log('Starting Last.fm polling every 30 seconds...');
+            setControlsDisabled(true);
+            stopPollingButton.disabled = false;
+
+            // Clear last printed track to force print on start
+            lastPrintedTrack = '';
+
+            // Poll immediately, then set interval
+            pollLastFm(user, apiKey);
+            lastfmPollInterval = setInterval(() => pollLastFm(user, apiKey), 30000);
+        });
+
+        stopPollingButton.addEventListener('click', stopPolling);
+
+        function stopPolling() {
+            if (lastfmPollInterval) {
+                clearInterval(lastfmPollInterval);
+                lastfmPollInterval = null;
+            }
+            log('Stopped Last.fm polling.');
+            setControlsDisabled(false);
+            stopPollingButton.disabled = true;
+        }
+
+        async function pollLastFm(user, apiKey) {
+            log('Polling Last.fm...');
+            try {
+                const url = `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${user}&api_key=${apiKey}&format=json&limit=1`;
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(`Last.fm API error: ${response.statusText}`);
+
+                const data = await response.json();
+
+                if (data.error) throw new Error(`Last.fm API error: ${data.message}`);
+
+                const track = data.recenttracks.track[0];
+                const isNowPlaying = track['@attr'] && track['@attr'].nowplaying === 'true';
+
+                if (!isNowPlaying) {
+                    log('No track "now playing".');
                     return;
                 }
 
-                log(`--- SUCCESS! ---`);
-                log(`Found Service: ${service.uuid}`);
+                const trackName = `${track.artist['#text']} - ${track.name}`;
+                if (trackName !== lastPrintedTrack) {
+                    log(`New track detected: ${trackName}`);
 
-                try {
-                    const characteristics = await service.getCharacteristics();
-                    log(`  -> Found ${characteristics.length} Characteristics:`);
+                    // Add timestamp
+                    const now = new Date();
+                    const hours = String(now.getHours()).padStart(2, '0');
+                    const minutes = String(now.getMinutes()).padStart(2, '0');
+                    const trackWithTimestamp = `[${hours}:${minutes}] ${trackName}`;
 
-                    for (const char of characteristics) {
-                        let properties = [];
-                        if (char.properties.read) properties.push('read');
-                        if (char.properties.write) properties.push('write');
-                        if (char.properties.writeWithoutResponse) properties.push('writeWithoutResponse');
-                        if (char.properties.notify) properties.push('notify');
+                    lastPrintedTrack = trackName;
 
-                        log(`    -> Characteristic: ${char.uuid} (Supports: ${properties.join(', ')})`);
+                    // --- Generate image from this text ---
+                    const textImg = await generateImageFromText(trackWithTimestamp, 24);
+                    const imgData = getImageDataFromImage(textImg);
+
+                    // --- Print it! ---
+                    // 128 = default contrast. true = skip paper feed
+                    await printImageDataToPrinter(imgData, 128, true);
+                    log('Auto-printed Last.fm track.');
+
+                } else {
+                    log(`Still playing: ${trackName}`);
+                }
+            } catch (err) {
+                log(`--- LAST.FM ERROR ---`);
+                log(err.message);
+                stopPolling();
+            }
+        }
+
+
+        // =================================================================
+        // SHARED HELPER & PRINTING FUNCTIONS
+        // =================================================================
+
+        /**
+         * Disables/Enables all controls during printing
+         */
+        function setControlsDisabled(disabled) {
+            fileInput.disabled = disabled;
+            contrastSlider.disabled = disabled;
+            printButton.disabled = disabled;
+            generateTextButton.disabled = disabled;
+            startPollingButton.disabled = disabled;
+            // Don't disable stop button
+            stopPollingButton.disabled = disabled ? true : !lastfmPollInterval;
+        }
+
+        /**
+         * Helper to quickly get B&W ImageData from an Image
+         */
+        function getImageDataFromImage(img) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const scaledHeight = Math.floor(img.height * (PRINTER_WIDTH_PX / img.width));
+            canvas.width = PRINTER_WIDTH_PX;
+            canvas.height = scaledHeight;
+
+            ctx.drawImage(img, 0, 0, PRINTER_WIDTH_PX, scaledHeight);
+            const imageData = ctx.getImageData(0, 0, PRINTER_WIDTH_PX, scaledHeight);
+            return imageData;
+        }
+
+        /**
+         * Helper to generate an Image object from text (for Last.fm)
+         */
+        function generateImageFromText(text, fontSize) {
+            return new Promise((resolve) => {
+                const textCanvas = document.createElement('canvas');
+                const textCtx = textCanvas.getContext('2d');
+                textCanvas.width = PRINTER_WIDTH_PX;
+                textCtx.font = `${fontSize}px sans-serif`;
+
+                // Simple word wrap
+                const lines = [];
+                let currentLine = '';
+                const words = text.split(' ');
+
+                for (const word of words) {
+                    const testLine = currentLine + word + ' ';
+                    if (textCtx.measureText(testLine).width > PRINTER_WIDTH_PX && currentLine) {
+                        lines.push(currentLine.trim());
+                        currentLine = word + ' ';
+                    } else {
+                        currentLine = testLine;
                     }
-                } catch (err) {
-                    log(`    -> Error getting characteristics for this service: ${err.message}`);
+                }
+                lines.push(currentLine.trim());
+
+                const lineHeight = fontSize * 1.2;
+                textCanvas.height = lines.length * lineHeight;
+
+                textCtx.fillStyle = 'white';
+                textCtx.fillRect(0, 0, textCanvas.width, textCanvas.height);
+                textCtx.fillStyle = 'black';
+                textCtx.font = `${fontSize}px sans-serif`;
+                textCtx.textBaseline = 'top';
+
+                for (let i = 0; i < lines.length; i++) {
+                    textCtx.fillText(lines[i], 0, i * lineHeight);
                 }
 
-                log('\n--- DISCOVERY FINISHED ---');
-                log('We did it! Please copy the "Characteristic UUID" that supports "write" or "writeWithoutResponse" and paste it back to me.');
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.src = textCanvas.toDataURL();
+            });
+        }
 
-            } catch (err) {
-                log(`\n--- ERROR ---`);
-                log(err.message);
-                log('This can fail if the UUID is wrong, or if you did not select the device.');
+        /**
+         * The B&W conversion logic, shared by preview and print
+         */
+        function convertImageDataToBW(imageData, threshold) {
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const average = (r + g + b) / 3;
+                const bw = (average < threshold) ? 0 : 255;
+                data[i] = bw; data[i + 1] = bw; data[i + 2] = bw;
             }
-        });
+        }
+
+        /**
+         * Helper to check if a pixel is black from B&W ImageData
+         */
+        function isPixelBlack(imageData, x, y, threshold) {
+            // This is simpler: since we converted the preview, just check one channel
+            const pixelIndex = (y * imageData.width + x) * 4;
+            // data[0] is the Red channel. If it's < threshold, it's black.
+            return imageData.data[pixelIndex] < threshold;
+        }
+
+        /**
+         * Creates the 'GS v 0' bitmap header as a Uint8Array.
+         */
+        function createBitmapHeader(sliceHeight) {
+            const widthInBytes = PRINTER_WIDTH_PX / 8; // 384 / 8 = 48 bytes
+            return new Uint8Array([
+                0x1D, 0x76, 0x30, 0x00, // 'GS v 0' command, mode 0
+                widthInBytes, 0,         // Width: 48 bytes
+                sliceHeight, 0           // Height: 1-8 dots (variable!)
+            ]);
+        }
+
+        /**
+         * Main function to convert ImageData to raw printer buffers and send.
+         */
+        async function printImageDataToPrinter(imageData, printThreshold, skipFeed = false) {
+            if (!printerCharacteristic) {
+                throw new Error("Printer is not connected.");
+            }
+
+            const width = imageData.width;
+            const height = imageData.height;
+
+            // Apply the B&W conversion *at print time*
+            // This ensures what we print matches the threshold
+            // We must clone the data so we don't modify the preview canvas
+            const printImageData = new ImageData(
+                new Uint8ClampedArray(imageData.data),
+                width,
+                height
+            );
+            convertImageDataToBW(printImageData, printThreshold);
+
+            log('Sending INIT command...');
+            await writeToPrinter(INIT);
+
+            log('Starting image data stream...');
+            const sliceWidthInBytes = PRINTER_WIDTH_PX / 8;
+
+            for (let y_slice = 0; y_slice < height; y_slice += SLICE_HEIGHT_PX) {
+                const actualSliceHeight = Math.min(SLICE_HEIGHT_PX, height - y_slice);
+
+                const header = createBitmapHeader(actualSliceHeight);
+                await writeToPrinter(header);
+
+                const sliceData = new Uint8Array(sliceWidthInBytes * actualSliceHeight);
+                let sliceBufferIndex = 0;
+
+                for (let y = 0; y < actualSliceHeight; y++) {
+                    const currentY = y_slice + y;
+                    for (let x_byte = 0; x_byte < sliceWidthInBytes; x_byte++) {
+                        let horizontalByte = 0;
+                        for (let bit = 0; bit < 8; bit++) {
+                            const currentX = (x_byte * 8) + bit;
+                            // Check the *print-time* converted data
+                            if (isPixelBlack(printImageData, currentX, currentY, printThreshold)) {
+                                horizontalByte |= (1 << (7 - bit));
+                            }
+                        }
+                        sliceData[sliceBufferIndex] = horizontalByte;
+                        sliceBufferIndex++;
+                    }
+                }
+                await writeToPrinter(sliceData);
+            }
+            log('Image data stream finished.');
+
+            if (!skipFeed) {
+                log('Sending feed commands...');
+                await writeToPrinter(FEED_ONE_LINE);
+                await writeToPrinter(FEED_ONE_LINE);
+                await writeToPrinter(FEED_ONE_LINE);
+            }
+        }
+
     </script>
 </body>
 
