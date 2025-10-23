@@ -16,6 +16,15 @@
             padding: 15px;
         }
 
+        input[type="text"] {
+            font-size: 16px;
+            padding: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+
         pre {
             background-color: #eee;
             border: 1px solid #ccc;
@@ -27,20 +36,19 @@
 </head>
 
 <body>
-    <h1>Bluetooth Service Discover (v2)</h1>
-    <p>This version now specifically requests permission for the standard "Serial Port Service" to get past the Android
-        error.</p>
+    <h1>Bluetooth Service Discover (v3 - The "Hack")</h1>
+    <p>Use a tool like "nRF Connect for Mobile" to find your printer's proprietary "Service UUID" (the one with a
+        "write" characteristic) and paste it below.</p>
+
+    <input type="text" id="serviceUuidInput" placeholder="Paste Service UUID from nRF Connect here...">
+
     <button id="connectButton">Connect & Discover Services</button>
     <pre id="log">Awaiting connection...</pre>
 
     <script>
         const connectButton = document.getElementById('connectButton');
         const logDiv = document.getElementById('log');
-
-        // --- THIS IS THE FIX ---
-        // We are now explicitly asking for the standard Serial Port Profile (SPP) UUID
-        // to get past the "Origin is not allowed" error on Android.
-        const SPP_SERVICE_UUID = '00001101-0000-1000-8000-00805f9b34fb';
+        const serviceUuidInput = document.getElementById('serviceUuidInput');
 
         function log(message) {
             console.log(message);
@@ -48,16 +56,24 @@
         }
 
         connectButton.addEventListener('click', async () => {
+            const proprietaryServiceUuid = serviceUuidInput.value.trim();
+
+            if (!proprietaryServiceUuid) {
+                log('--- ERROR ---');
+                log('Please paste the Service UUID from nRF Connect first.');
+                return;
+            }
+
+            log(`Attempting to use proprietary Service UUID: ${proprietaryServiceUuid}`);
             log('Requesting Bluetooth device...');
+
             try {
                 const device = await navigator.bluetooth.requestDevice({
-                    // We can't use acceptAllDevices: true if we specify services.
-                    // We will filter by the service we want.
-                    filters: [{
-                        services: [SPP_SERVICE_UUID]
-                    }],
-                    // And we also ask for it to be optional, to be safe.
-                    optionalServices: [SPP_SERVICE_UUID]
+                    // Use acceptAllDevices to ensure the printer appears in the list
+                    acceptAllDevices: true,
+                    // ...but then *also* ask for permission to use the 
+                    // proprietary UUID you just entered.
+                    optionalServices: [proprietaryServiceUuid]
                 });
 
                 log(`Connecting to GATT Server on ${device.name}...`);
@@ -69,45 +85,46 @@
                 log(`Device Name: ${device.name}`);
                 log(`Device ID: ${device.id}`);
 
-                log('\nDiscovering all services...');
-                // Note: We're calling getPrimaryServices() *without* a UUID
-                // to see if we can discover *all* services now that we have permission
-                // for at least one.
-                const services = await server.getPrimaryServices();
+                log(`\nAttempting to get Service: ${proprietaryServiceUuid}`);
 
-                if (services.length === 0) {
-                    log('No services found. This could be a pairing issue or the wrong UUID.');
+                // Now, instead of discovering all, we will try to get
+                // the *exact* service you gave us.
+                const service = await server.getPrimaryService(proprietaryServiceUuid);
+
+                if (!service) {
+                    log('--- ERROR ---');
+                    log('Connected, but could not get the specified service.');
+                    log('Check the UUID for typos.');
                     return;
                 }
 
-                log(`--- FOUND ${services.length} SERVICES ---`);
+                log(`--- SUCCESS! ---`);
+                log(`Found Service: ${service.uuid}`);
 
-                for (const service of services) {
-                    log(`\nFound Service: ${service.uuid}`);
+                try {
+                    const characteristics = await service.getCharacteristics();
+                    log(`  -> Found ${characteristics.length} Characteristics:`);
 
-                    try {
-                        const characteristics = await service.getCharacteristics();
-                        log(`  -> Found ${characteristics.length} Characteristics:`);
+                    for (const char of characteristics) {
+                        let properties = [];
+                        if (char.properties.read) properties.push('read');
+                        if (char.properties.write) properties.push('write');
+                        if (char.properties.writeWithoutResponse) properties.push('writeWithoutResponse');
+                        if (char.properties.notify) properties.push('notify');
 
-                        for (const char of characteristics) {
-                            let properties = [];
-                            if (char.properties.read) properties.push('read');
-                            if (char.properties.write) properties.push('write');
-                            if (char.properties.writeWithoutResponse) properties.push('writeWithoutResponse');
-                            if (char.properties.notify) properties.push('notify');
-
-                            log(`    -> Characteristic: ${char.uuid} (Supports: ${properties.join(', ')})`);
-                        }
-                    } catch (err) {
-                        log(`    -> Error getting characteristics for this service: ${err.message}`);
+                        log(`    -> Characteristic: ${char.uuid} (Supports: ${properties.join(', ')})`);
                     }
+                } catch (err) {
+                    log(`    -> Error getting characteristics for this service: ${err.message}`);
                 }
+
                 log('\n--- DISCOVERY FINISHED ---');
-                log('Please copy and paste this entire log back to me.');
+                log('We did it! Please copy the "Characteristic UUID" that supports "write" or "writeWithoutResponse" and paste it back to me.');
 
             } catch (err) {
                 log(`\n--- ERROR ---`);
                 log(err.message);
+                log('This can fail if the UUID is wrong, or if you did not select the device.');
             }
         });
     </script>
