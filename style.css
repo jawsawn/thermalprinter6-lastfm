@@ -325,10 +325,12 @@ input[type="range"]:disabled::-webkit-slider-thumb {
     border-radius: 8px;
     min-height: 200px;
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
     padding: 1rem;
     overflow: hidden;
+    position: relative;
 }
 
 canvas {
@@ -340,6 +342,11 @@ canvas {
 .empty-state {
     color: #94a3b8;
     font-style: italic;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
 }
 
 /* Text Mode */

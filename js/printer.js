@@ -40,9 +40,10 @@ export class Printer {
      *
      * @param {ImageData} imageData - The un-thresholded image data
      * @param {number} contrastThreshold - 0-255 threshold
+     * @param {boolean} feedPaper - Whether to feed paper after printing
      * @param {function} logCallback - Optional callback for logging progress
      */
-    async printImage(imageData, contrastThreshold, logCallback = () => {}) {
+    async printImage(imageData, contrastThreshold, feedPaper = true, logCallback = () => {}) {
         if (!this.connection) {
             throw new Error("No active connection.");
         }
@@ -98,10 +99,12 @@ export class Printer {
             }
         }
 
-        logCallback('Feeding paper...');
-        await this.connection.write(this.CMD_FEED);
-        await this.connection.write(this.CMD_FEED);
-        await this.connection.write(this.CMD_FEED);
+        if (feedPaper) {
+            logCallback('Feeding paper...');
+            await this.connection.write(this.CMD_FEED);
+            await this.connection.write(this.CMD_FEED);
+            await this.connection.write(this.CMD_FEED);
+        }
         logCallback('Print job complete.');
     }
 }

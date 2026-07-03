@@ -19,7 +19,10 @@ const fileInput = document.getElementById('fileInput');
 const fileName = document.getElementById('fileName');
 const contrastSlider = document.getElementById('contrastSlider');
 const contrastValue = document.getElementById('contrastValue');
+const ditherContrastSlider = document.getElementById('ditherContrastSlider');
+const ditherContrastValue = document.getElementById('ditherContrastValue');
 const ditherToggle = document.getElementById('ditherToggle');
+const feedToggle = document.getElementById('feedToggle');
 const btnPrintImage = document.getElementById('btnPrintImage');
 const previewCanvas = document.getElementById('previewCanvas');
 const emptyPreview = document.getElementById('emptyPreview');
@@ -68,7 +71,9 @@ function setUIConnected(isConnected) {
     // We only enable printing/sliders if there is also an image loaded
     const canPrint = isConnected && currentImage !== null;
     contrastSlider.disabled = !canPrint;
+    ditherContrastSlider.disabled = !canPrint;
     ditherToggle.disabled = !canPrint;
+    feedToggle.disabled = !canPrint;
     btnPrintImage.disabled = !canPrint;
 
     if (isConnected) {
@@ -124,8 +129,9 @@ function updatePreview() {
     if (!currentImage) return;
     emptyPreview.style.display = 'none';
     const threshold = parseInt(contrastSlider.value);
+    const ditherContrast = parseInt(ditherContrastSlider.value);
     const dither = ditherToggle.checked;
-    ImageProcessor.processForPreview(previewCanvas, currentImage, PRINTER_WIDTH, threshold, dither);
+    ImageProcessor.processForPreview(previewCanvas, currentImage, PRINTER_WIDTH, threshold, dither, ditherContrast);
 }
 
 fileInput.addEventListener('change', (e) => {
@@ -152,6 +158,11 @@ fileInput.addEventListener('change', (e) => {
 
 contrastSlider.addEventListener('input', () => {
     contrastValue.textContent = contrastSlider.value;
+    updatePreview();
+});
+
+ditherContrastSlider.addEventListener('input', () => {
+    ditherContrastValue.textContent = ditherContrastSlider.value;
     updatePreview();
 });
 
@@ -206,16 +217,18 @@ btnPrintImage.addEventListener('click', async () => {
         // Get the un-thresholded original image data scaled to printer width
         const rawImageData = ImageProcessor.getOriginalImageData(currentImage, PRINTER_WIDTH);
         const threshold = parseInt(contrastSlider.value);
+        const ditherContrast = parseInt(ditherContrastSlider.value);
         const dither = ditherToggle.checked;
 
         // If dithering, pre-process the data before sending to printer
         if (dither) {
-            ImageProcessor.applyDither(rawImageData, threshold);
+            ImageProcessor.applyDither(rawImageData, threshold, ditherContrast);
         }
         
+        const feedPaper = feedToggle.checked;
         const printer = new Printer(activeConnection);
         
-        await printer.printImage(rawImageData, threshold, (msg) => log(msg));
+        await printer.printImage(rawImageData, threshold, feedPaper, (msg) => log(msg));
         
     } catch (err) {
         log(`Print error: ${err.message}`);

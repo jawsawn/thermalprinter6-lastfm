@@ -68,9 +68,10 @@ export class ImageProcessor {
      * @param {number} printerWidth - Target width
      * @param {number} contrastThreshold - Threshold for B&W
      * @param {boolean} dither - If true, use Floyd-Steinberg dithering
+     * @param {number} ditherContrast - Contrast adjustment for dithering (-255 to 255)
      * @returns {ImageData} - The processed image data
      */
-    static processForPreview(canvas, img, printerWidth, contrastThreshold, dither = false) {
+    static processForPreview(canvas, img, printerWidth, contrastThreshold, dither = false, ditherContrast = 0) {
         if (!img) return null;
 
         const ctx = canvas.getContext('2d');
@@ -90,7 +91,7 @@ export class ImageProcessor {
         const imageData = ctx.getImageData(0, 0, printerWidth, scaledHeight);
 
         if (dither) {
-            this._floydSteinberg(imageData, printerWidth, scaledHeight, contrastThreshold);
+            this._floydSteinberg(imageData, printerWidth, scaledHeight, contrastThreshold, ditherContrast);
         } else {
             this._hardThreshold(imageData, contrastThreshold);
         }
@@ -120,15 +121,27 @@ export class ImageProcessor {
     /**
      * Floyd-Steinberg dithering: distributes quantization error to neighboring pixels
      * for much better image quality on thermal printers.
+     * Includes contrast adjustment before dithering.
      */
-    static _floydSteinberg(imageData, width, height, threshold) {
+    static _floydSteinberg(imageData, width, height, threshold, contrast = 0) {
         const data = imageData.data;
+        
+        // Calculate contrast factor
+        // factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
+        const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
 
         // Build a grayscale float buffer for error diffusion
         const gray = new Float32Array(width * height);
         for (let i = 0; i < gray.length; i++) {
             const idx = i * 4;
-            gray[i] = 0.2126 * data[idx] + 0.7152 * data[idx + 1] + 0.0722 * data[idx + 2];
+            let grayscale = 0.2126 * data[idx] + 0.7152 * data[idx + 1] + 0.0722 * data[idx + 2];
+            
+            // Apply contrast
+            grayscale = factor * (grayscale - 128) + 128;
+            if (grayscale < 0) grayscale = 0;
+            if (grayscale > 255) grayscale = 255;
+            
+            gray[i] = grayscale;
         }
 
         for (let y = 0; y < height; y++) {
@@ -184,7 +197,7 @@ export class ImageProcessor {
      * After this, the printer's threshold is effectively bypassed since
      * pixels are already 0 or 255.
      */
-    static applyDither(imageData, threshold) {
-        this._floydSteinberg(imageData, imageData.width, imageData.height, threshold);
+    static applyDither(imageData, threshold, contrast = 0) {
+        this._floydSteinberg(imageData, imageData.width, imageData.height, threshold, contrast);
     }
 }
