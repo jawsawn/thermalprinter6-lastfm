@@ -10,7 +10,7 @@ export class ImageProcessor {
             try {
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
-                
+
                 const fontSize = 20;
                 const lineHeight = 24;
                 const padding = 5;
@@ -84,6 +84,7 @@ export class ImageProcessor {
         ctx.fillStyle = '#FFFFFF';
         ctx.fillRect(0, 0, printerWidth, scaledHeight);
 
+
         // Draw original on top of white background
         ctx.drawImage(img, 0, 0, printerWidth, scaledHeight);
 
@@ -125,7 +126,7 @@ export class ImageProcessor {
      */
     static _floydSteinberg(imageData, width, height, threshold, contrast = 0) {
         const data = imageData.data;
-        
+
         // Calculate contrast factor
         // factor = (259 * (contrast + 255)) / (255 * (259 - contrast))
         const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
@@ -135,12 +136,12 @@ export class ImageProcessor {
         for (let i = 0; i < gray.length; i++) {
             const idx = i * 4;
             let grayscale = 0.2126 * data[idx] + 0.7152 * data[idx + 1] + 0.0722 * data[idx + 2];
-            
+
             // Apply contrast
             grayscale = factor * (grayscale - 128) + 128;
             if (grayscale < 0) grayscale = 0;
             if (grayscale > 255) grayscale = 255;
-            
+
             gray[i] = grayscale;
         }
 
@@ -153,10 +154,10 @@ export class ImageProcessor {
                 const error = oldPixel - newPixel;
 
                 // Distribute error to neighbors (Floyd-Steinberg coefficients)
-                if (x + 1 < width)                     gray[i + 1]         += error * 7 / 16;
-                if (y + 1 < height && x - 1 >= 0)      gray[i + width - 1] += error * 3 / 16;
-                if (y + 1 < height)                     gray[i + width]     += error * 5 / 16;
-                if (y + 1 < height && x + 1 < width)   gray[i + width + 1] += error * 1 / 16;
+                if (x + 1 < width) gray[i + 1] += error * 7 / 16;
+                if (y + 1 < height && x - 1 >= 0) gray[i + width - 1] += error * 3 / 16;
+                if (y + 1 < height) gray[i + width] += error * 5 / 16;
+                if (y + 1 < height && x + 1 < width) gray[i + width + 1] += error * 1 / 16;
             }
         }
 
@@ -178,7 +179,7 @@ export class ImageProcessor {
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         const scaledHeight = Math.floor(img.height * (targetWidth / img.width));
-        
+
         canvas.width = targetWidth;
         canvas.height = scaledHeight;
 
@@ -187,7 +188,7 @@ export class ImageProcessor {
         ctx.fillRect(0, 0, targetWidth, scaledHeight);
 
         ctx.drawImage(img, 0, 0, targetWidth, scaledHeight);
-        
+
         return ctx.getImageData(0, 0, targetWidth, scaledHeight);
     }
 
