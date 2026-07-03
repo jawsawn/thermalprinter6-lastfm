@@ -78,7 +78,11 @@ export class ImageProcessor {
         canvas.width = printerWidth;
         canvas.height = scaledHeight;
 
-        // Draw original
+        // Fill white first so transparent pixels become white (no print)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, printerWidth, scaledHeight);
+
+        // Draw original on top of white background
         ctx.drawImage(img, 0, 0, printerWidth, scaledHeight);
 
         // Get pixel data
@@ -114,6 +118,11 @@ export class ImageProcessor {
         
         canvas.width = targetWidth;
         canvas.height = scaledHeight;
+
+        // Fill white first so transparent pixels become white (no print)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, targetWidth, scaledHeight);
+
         ctx.drawImage(img, 0, 0, targetWidth, scaledHeight);
         
         return ctx.getImageData(0, 0, targetWidth, scaledHeight);
