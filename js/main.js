@@ -19,6 +19,7 @@ const fileInput = document.getElementById('fileInput');
 const fileName = document.getElementById('fileName');
 const contrastSlider = document.getElementById('contrastSlider');
 const contrastValue = document.getElementById('contrastValue');
+const ditherToggle = document.getElementById('ditherToggle');
 const btnPrintImage = document.getElementById('btnPrintImage');
 const previewCanvas = document.getElementById('previewCanvas');
 const emptyPreview = document.getElementById('emptyPreview');
@@ -67,6 +68,7 @@ function setUIConnected(isConnected) {
     // We only enable printing/sliders if there is also an image loaded
     const canPrint = isConnected && currentImage !== null;
     contrastSlider.disabled = !canPrint;
+    ditherToggle.disabled = !canPrint;
     btnPrintImage.disabled = !canPrint;
 
     if (isConnected) {
@@ -122,7 +124,8 @@ function updatePreview() {
     if (!currentImage) return;
     emptyPreview.style.display = 'none';
     const threshold = parseInt(contrastSlider.value);
-    ImageProcessor.processForPreview(previewCanvas, currentImage, PRINTER_WIDTH, threshold);
+    const dither = ditherToggle.checked;
+    ImageProcessor.processForPreview(previewCanvas, currentImage, PRINTER_WIDTH, threshold, dither);
 }
 
 fileInput.addEventListener('change', (e) => {
@@ -149,6 +152,10 @@ fileInput.addEventListener('change', (e) => {
 
 contrastSlider.addEventListener('input', () => {
     contrastValue.textContent = contrastSlider.value;
+    updatePreview();
+});
+
+ditherToggle.addEventListener('change', () => {
     updatePreview();
 });
 
@@ -199,6 +206,12 @@ btnPrintImage.addEventListener('click', async () => {
         // Get the un-thresholded original image data scaled to printer width
         const rawImageData = ImageProcessor.getOriginalImageData(currentImage, PRINTER_WIDTH);
         const threshold = parseInt(contrastSlider.value);
+        const dither = ditherToggle.checked;
+
+        // If dithering, pre-process the data before sending to printer
+        if (dither) {
+            ImageProcessor.applyDither(rawImageData, threshold);
+        }
         
         const printer = new Printer(activeConnection);
         

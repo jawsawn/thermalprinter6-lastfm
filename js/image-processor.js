@@ -61,15 +61,16 @@ export class ImageProcessor {
     }
 
     /**
-     * Draws an image to a canvas, applies B&W threshold, and returns the ImageData.
-     * Useful for previewing what the printer will print.
+     * Draws an image to a canvas, applies B&W conversion, and returns the ImageData.
+     * Supports both hard threshold and Floyd-Steinberg dithering.
      * @param {HTMLCanvasElement} canvas - The preview canvas
      * @param {HTMLImageElement} img - The source image
      * @param {number} printerWidth - Target width
      * @param {number} contrastThreshold - Threshold for B&W
-     * @returns {ImageData} - The thresholded image data
+     * @param {boolean} dither - If true, use Floyd-Steinberg dithering
+     * @returns {ImageData} - The processed image data
      */
-    static processForPreview(canvas, img, printerWidth, contrastThreshold) {
+    static processForPreview(canvas, img, printerWidth, contrastThreshold, dither = false) {
         if (!img) return null;
 
         const ctx = canvas.getContext('2d');
@@ -87,9 +88,23 @@ export class ImageProcessor {
 
         // Get pixel data
         const imageData = ctx.getImageData(0, 0, printerWidth, scaledHeight);
-        const data = imageData.data;
 
-        // Apply Threshold
+        if (dither) {
+            this._floydSteinberg(imageData, printerWidth, scaledHeight, contrastThreshold);
+        } else {
+            this._hardThreshold(imageData, contrastThreshold);
+        }
+
+        // Put back for preview
+        ctx.putImageData(imageData, 0, 0);
+        return imageData;
+    }
+
+    /**
+     * Simple hard threshold: pixels below threshold become black, above become white.
+     */
+    static _hardThreshold(imageData, contrastThreshold) {
+        const data = imageData.data;
         for (let i = 0; i < data.length; i += 4) {
             const r = data[i];
             const g = data[i + 1];
@@ -99,12 +114,47 @@ export class ImageProcessor {
             data[i] = bw;
             data[i + 1] = bw;
             data[i + 2] = bw;
-            // Alpha remains unchanged
+        }
+    }
+
+    /**
+     * Floyd-Steinberg dithering: distributes quantization error to neighboring pixels
+     * for much better image quality on thermal printers.
+     */
+    static _floydSteinberg(imageData, width, height, threshold) {
+        const data = imageData.data;
+
+        // Build a grayscale float buffer for error diffusion
+        const gray = new Float32Array(width * height);
+        for (let i = 0; i < gray.length; i++) {
+            const idx = i * 4;
+            gray[i] = 0.2126 * data[idx] + 0.7152 * data[idx + 1] + 0.0722 * data[idx + 2];
         }
 
-        // Put back for preview
-        ctx.putImageData(imageData, 0, 0);
-        return imageData;
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const i = y * width + x;
+                const oldPixel = gray[i];
+                const newPixel = oldPixel < threshold ? 0 : 255;
+                gray[i] = newPixel;
+                const error = oldPixel - newPixel;
+
+                // Distribute error to neighbors (Floyd-Steinberg coefficients)
+                if (x + 1 < width)                     gray[i + 1]         += error * 7 / 16;
+                if (y + 1 < height && x - 1 >= 0)      gray[i + width - 1] += error * 3 / 16;
+                if (y + 1 < height)                     gray[i + width]     += error * 5 / 16;
+                if (y + 1 < height && x + 1 < width)   gray[i + width + 1] += error * 1 / 16;
+            }
+        }
+
+        // Write back to ImageData
+        for (let i = 0; i < gray.length; i++) {
+            const bw = gray[i] < 128 ? 0 : 255;
+            const idx = i * 4;
+            data[idx] = bw;
+            data[idx + 1] = bw;
+            data[idx + 2] = bw;
+        }
     }
 
     /**
@@ -126,5 +176,15 @@ export class ImageProcessor {
         ctx.drawImage(img, 0, 0, targetWidth, scaledHeight);
         
         return ctx.getImageData(0, 0, targetWidth, scaledHeight);
+    }
+
+    /**
+     * Applies Floyd-Steinberg dithering to ImageData in-place.
+     * Used by the print path to pre-process the data before sending to printer.
+     * After this, the printer's threshold is effectively bypassed since
+     * pixels are already 0 or 255.
+     */
+    static applyDither(imageData, threshold) {
+        this._floydSteinberg(imageData, imageData.width, imageData.height, threshold);
     }
 }
