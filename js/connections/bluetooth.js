@@ -20,6 +20,9 @@ export class BluetoothConnection {
                 '000018f0-0000-1000-8000-00805f9b34fb', // Common printer service
                 '49535343-fe7d-4ae5-8fa9-9fafd205e455', // Another common BLE SPP
                 '0000180f-0000-1000-8000-00805f9b34fb', // Battery (sometimes bundled)
+                '0000af30-0000-1000-8000-00805f9b34fb', // Cat Printer Advertisement (Discovery)
+                '0000ae30-0000-1000-8000-00805f9b34fb', // Cat Printer Primary Service (Interaction)
+                '0000ff00-0000-1000-8000-00805f9b34fb', // Generic / Phomemo / PeriPage
             ]
         });
 
